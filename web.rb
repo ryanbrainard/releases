@@ -34,6 +34,11 @@ class Heroku::Client
   def user_info
      json_decode(get("/user", { :accept => 'application/json' }).to_s)
   end
+
+  # todo: temp...remove
+  def releases(app)
+    json_decode(get("/apps/#{app}/releases", { :accept => 'application/json' }).to_s)
+  end
 end
 
 helpers do
@@ -113,11 +118,13 @@ post "/apps/:source_app/copy/:target_app" do
   halt(403, "must specify source_app") unless params[:source_app]
   halt(403, "must specify target_app") unless params[:target_app]
 
+  api = api(api_key, params[:cloud])
+
   # metrics logging
   metrics = {
     'action' => 'copy',
     'user_agent' => request.user_agent,
-    'user' => api(api_key, params[:cloud]).user_info['email'],
+    'user' => api.user_info['email'],
     'command' => params[:command],
     'source_app' => params[:source_app],
     'target_app' => params[:target_app],
@@ -126,12 +133,14 @@ post "/apps/:source_app/copy/:target_app" do
 
   begin
     begin
-      source_slug = api(api_key, params[:cloud]).release_slug(params[:source_app])
+      source_slug = api.release_slug(params[:source_app])
     rescue RestClient::UnprocessableEntity
       halt(403, "no access to releases_slug")
     end
 
-    description = params[:description] ? params[:description] : "Copy from #{params[:source_app]} #{source_slug["name"]}"
+    descVerb = params[:command] == "pipeline:promote" ? "Promote" : "Copy"
+    source_release =  api.releases(params[:source_app]).last
+    description = "#{descVerb} #{params[:source_app]} #{source_slug["name"]} #{source_release["commit"]}"
 
     begin
       release = release_from_url(api_key, params[:cloud], params[:target_app], source_slug["slug_url"], description)

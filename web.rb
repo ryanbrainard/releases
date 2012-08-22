@@ -13,7 +13,7 @@ class Heroku::Client
     json_decode(post("/apps/#{app_name}/releases", json_encode(payload)))
   end
 
-  def release(app_name, slug, description, options={})
+  def release(app_name, slug, description, head, options={})
     release = releases_new(app_name)
     RestClient.put(release["slug_put_url"], File.open(slug, "rb"), :content_type => nil)
     user = json_decode(get("/account").to_s)["email"]
@@ -22,7 +22,7 @@ class Heroku::Client
       "run_deploy_hooks" => true,
       "user" => user,
       "release_descr" => description,
-      "head" => Digest::SHA1.hexdigest(Time.now.to_f.to_s)
+      "head" => head
     }) { |k, v1, v2| v1 || v2 }.merge(options)
     releases_create(app_name, payload)
   end
@@ -62,7 +62,7 @@ helpers do
     halt 422, { "error" => message }.to_json
   end
 
-  def release_from_url(api_key, cloud, app, build_url, description, processes = nil)
+  def release_from_url(api_key, cloud, app, build_url, description, head, processes = nil)
     release = Dir.mktmpdir do |dir|
       escaped_build_url = Shellwords.escape(build_url)
 
@@ -108,7 +108,8 @@ post "/apps/:app/release" do
   halt(403, "must specify build_url") unless params[:build_url]
   halt(403, "must specify description") unless params[:description]
 
-  release_from_url(api_key, params[:cloud], params[:app], params[:build_url], params[:description],params[:processes])
+  head = Digest::SHA1.hexdigest(Time.now.to_f.to_s)
+  release_from_url(api_key, params[:cloud], params[:app], params[:build_url], params[:description], head, params[:processes])
 end
 
 post "/apps/:source_app/copy/:target_app" do
@@ -140,10 +141,11 @@ post "/apps/:source_app/copy/:target_app" do
 
     descVerb = params[:command] == "pipeline:promote" ? "Promote" : "Copy"
     source_release =  api.releases(params[:source_app]).last
-    description = "#{descVerb} #{params[:source_app]} #{source_slug["name"]} #{source_release["commit"]}"
+    head = source_release["commit"]
+    description = "#{descVerb} #{params[:source_app]} #{source_slug["name"]} #{head}"
 
     begin
-      release = release_from_url(api_key, params[:cloud], params[:target_app], source_slug["slug_url"], description)
+      release = release_from_url(api_key, params[:cloud], params[:target_app], source_slug["slug_url"], description, head)
       metrics['result'] = 'success'
       release
     rescue RestClient::UnprocessableEntity

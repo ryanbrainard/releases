@@ -92,7 +92,7 @@ helpers do
           "process_types" => procfile
       }
 
-      release = api(api_key, cloud).release(app, "#{dir}/build", description, release_options)
+      release = api(api_key, cloud).release(app, "#{dir}/build", description, head, release_options)
       release["release"]
     end
 

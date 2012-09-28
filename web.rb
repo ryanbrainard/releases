@@ -142,6 +142,7 @@ post "/apps/:source_app/copy/:target_app" do
     descVerb = params[:command] == "pipeline:promote" ? "Promote" : "Copy"
     source_release =  api.releases(params[:source_app]).last
     head = source_release["commit"]
+    halt(404, "Code release not found for #{params[:source_app]}") if head.nil?
     description = "#{descVerb} #{params[:source_app]} #{source_slug["name"]} #{head}"
 
     begin
